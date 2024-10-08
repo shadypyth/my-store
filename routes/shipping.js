@@ -1,24 +1,37 @@
 // routes/shipping.js
 const express = require('express');
-const shippo = require('shippo')('YOUR_SHIPPO_SECRET_KEY');  // ضع مفتاحك السري من Shippo هنا
+const shippo = require('shippo')(process.env.SHIPPO_API_KEY);
 const router = express.Router();
 
+// إنشاء شحنة جديدة
 router.post('/create-shipment', async (req, res) => {
-  const { address_from, address_to, parcel } = req.body;
+  const { addressFrom, addressTo, parcel } = req.body;
 
   try {
-    // إنشاء شحنة جديدة باستخدام Shippo
+    // إنشاء شحنة باستخدام Shippo
     const shipment = await shippo.shipment.create({
-      address_from,
-      address_to,
+      address_from: addressFrom,
+      address_to: addressTo,
       parcels: [parcel],
       async: false,
     });
 
-    res.json(shipment);  // إعادة بيانات الشحنة إلى الواجهة الأمامية
+    res.status(201).json(shipment);
   } catch (error) {
-    console.error('Error creating shipment:', error);
-    res.status(500).json({ error: 'Error creating shipment' });
+    res.status(500).json({ message: 'حدث خطأ أثناء إنشاء الشحنة' });
+  }
+});
+
+// جلب حالة الشحنة
+router.get('/track/:shipmentId', async (req, res) => {
+  const { shipmentId } = req.params;
+
+  try {
+    // تتبع الشحنة باستخدام Shippo
+    const trackingInfo = await shippo.track.get_status('shippo', shipmentId);
+    res.status(200).json(trackingInfo);
+  } catch (error) {
+    res.status(500).json({ message: 'حدث خطأ أثناء تتبع الشحنة' });
   }
 });
 

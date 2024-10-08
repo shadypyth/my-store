@@ -1,25 +1,37 @@
 // routes/payment.js
 const express = require('express');
-const stripe = require('stripe')('YOUR_STRIPE_SECRET_KEY');  // ضع مفتاحك السري من Stripe هنا
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const router = express.Router();
 
+// إنشاء نية دفع جديدة
 router.post('/create-payment-intent', async (req, res) => {
-  const { amount } = req.body;  // الحصول على المبلغ المطلوب للدفع
+  const { amount, currency } = req.body;
 
   try {
-    // إنشاء طلب دفع جديد باستخدام Stripe
+    // إنشاء نية دفع باستخدام Stripe
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: amount * 100,  // المبلغ هنا بالسنتات (لذا يتم ضربه في 100)
-      currency: 'usd',
-      payment_method_types: ['card'],  // دعم بطاقات الائتمان
+      amount: amount * 100, // المبلغ بالسنتات
+      currency: currency || 'usd',
     });
 
-    res.json({
-      clientSecret: paymentIntent.client_secret,  // إعادة الـ clientSecret إلى الواجهة الأمامية
+    res.status(201).json({
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
     });
   } catch (error) {
-    console.error('Error creating payment intent:', error);
-    res.status(500).json({ error: 'Error creating payment intent' });
+    res.status(500).json({ message: 'حدث خطأ أثناء إنشاء نية الدفع' });
+  }
+});
+
+// استرداد تفاصيل نية الدفع
+router.get('/payment-intent/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const paymentIntent = await stripe.paymentIntents.retrieve(id);
+    res.status(200).json(paymentIntent);
+  } catch (error) {
+    res.status(500).json({ message: 'حدث خطأ أثناء استرداد تفاصيل نية الدفع' });
   }
 });
 

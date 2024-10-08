@@ -1,115 +1,87 @@
 // routes/ads.js
 const express = require('express');
 const Ad = require('../models/Ad');
-const Product = require('../models/Product');  // استيراد نموذج المنتج
-const Vendor = require('../models/Vendor');    // استيراد نموذج التاجر
+const { checkRole } = require('../middlewares/auth');
 const router = express.Router();
 
-// جلب الإعلانات النشطة
-router.get('/active', async (req, res) => {
-  try {
-    const currentDate = new Date();
-    const activeAds = await Ad.find({
-      status: 'approved', 
-      startDate: { $lte: currentDate }, 
-      endDate: { $gte: currentDate }
-    }).populate('product vendor');  // الربط مع المنتجات والتجار
-
-    if (!activeAds.length) {
-      return res.status(404).json({ message: 'No active ads found' });
-    }
-
-    res.json(activeAds);
-  } catch (error) {
-    console.error('Error fetching active ads:', error);
-    res.status(500).json({ error: 'Error fetching active ads' });
-  }
-});
-
-// جلب الإعلانات المعلقة
-router.get('/pending', async (req, res) => {
-  try {
-    const pendingAds = await Ad.find({ status: 'pending' }).populate('product vendor');
-
-    if (!pendingAds.length) {
-      return res.status(404).json({ message: 'No pending ads found' });
-    }
-
-    res.json(pendingAds);
-  } catch (error) {
-    console.error('Error fetching pending ads:', error);
-    res.status(500).json({ error: 'Error fetching pending ads' });
-  }
-});
-
-// الموافقة على إعلان
-router.post('/approve/:id', async (req, res) => {
-  try {
-    const ad = await Ad.findByIdAndUpdate(req.params.id, { status: 'approved' }, { new: true });
-
-    if (!ad) {
-      return res.status(404).json({ error: 'Ad not found' });
-    }
-
-    res.json({ message: 'Ad approved successfully', ad });
-  } catch (error) {
-    console.error('Error approving ad:', error);
-    res.status(500).json({ error: 'Error approving ad' });
-  }
-});
-
-// رفض الإعلان
-router.post('/reject/:id', async (req, res) => {
-  try {
-    const ad = await Ad.findByIdAndUpdate(req.params.id, { status: 'rejected' }, { new: true });
-
-    if (!ad) {
-      return res.status(404).json({ error: 'Ad not found' });
-    }
-
-    res.json({ message: 'Ad rejected successfully', ad });
-  } catch (error) {
-    console.error('Error rejecting ad:', error);
-    res.status(500).json({ error: 'Error rejecting ad' });
-  }
-});
-
 // إنشاء إعلان جديد
-router.post('/', async (req, res) => {
+router.post('/', checkRole(['small_merchant']), async (req, res) => {
+  const { title, description, product, startDate, endDate } = req.body;
+  const merchant = req.user._id;
+
   try {
-    const { product, vendor, startDate, endDate, status } = req.body;
-    
-    // إنشاء الإعلان الجديد
     const newAd = new Ad({
+      title,
+      description,
       product,
-      vendor,
+      merchant,
       startDate,
       endDate,
-      status
     });
 
-    const savedAd = await newAd.save();
-
-    res.status(201).json(savedAd);
+    await newAd.save();
+    res.status(201).json(newAd);
   } catch (error) {
-    console.error('Error creating ad:', error);
-    res.status(500).json({ error: 'Error creating ad' });
+    res.status(500).json({ message: 'حدث خطأ أثناء إنشاء الإعلان' });
+  }
+});
+
+// جلب جميع الإعلانات
+router.get('/', async (req, res) => {
+  try {
+    const ads = await Ad.find().populate('product').populate('merchant');
+    res.status(200).json(ads);
+  } catch (error) {
+    res.status(500).json({ message: 'حدث خطأ أثناء جلب الإعلانات' });
+  }
+});
+
+// تعديل إعلان موجود
+router.put('/:id', checkRole(['small_merchant']), async (req, res) => {
+  const { id } = req.params;
+  const { title, description, startDate, endDate, isActive } = req.body;
+
+  try {
+    const ad = await Ad.findById(id);
+    if (!ad) {
+      return res.status(404).json({ message: 'الإعلان غير موجود' });
+    }
+
+    if (ad.merchant.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'ليس لديك الصلاحيات لتعديل هذا الإعلان' });
+    }
+
+    ad.title = title || ad.title;
+    ad.description = description || ad.description;
+    ad.startDate = startDate || ad.startDate;
+    ad.endDate = endDate || ad.endDate;
+    ad.isActive = isActive !== undefined ? isActive : ad.isActive;
+
+    await ad.save();
+    res.status(200).json(ad);
+  } catch (error) {
+    res.status(500).json({ message: 'حدث خطأ أثناء تعديل الإعلان' });
   }
 });
 
 // حذف إعلان
-router.delete('/:id', async (req, res) => {
-  try {
-    const ad = await Ad.findByIdAndDelete(req.params.id);
+router.delete('/:id', checkRole(['small_merchant']), async (req, res) => {
+  const { id } = req.params;
 
+  try {
+    const ad = await Ad.findById(id);
     if (!ad) {
-      return res.status(404).json({ error: 'Ad not found' });
+      return res.status(404).json({ message: 'الإعلان غير موجود' });
     }
 
-    res.json({ message: 'Ad deleted successfully' });
+    if (ad.merchant.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'ليس لديك الصلاحيات لحذف هذا الإعلان' });
+    }
+
+    await ad.remove();
+    res.status(200).json({ message: 'تم حذف الإعلان بنجاح' });
   } catch (error) {
-    console.error('Error deleting ad:', error);
-    res.status(500).json({ error: 'Error deleting ad' });
+    res.status(500).json({ message: 'حدث خطأ أثناء حذف الإعلان' });
   }
 });
 

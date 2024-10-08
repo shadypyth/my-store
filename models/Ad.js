@@ -3,9 +3,22 @@ const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
 const adSchema = new Schema({
+  title: {
+    type: String,
+    required: true,
+  },
+  description: {
+    type: String,
+    required: true,
+  },
   product: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Product',
+    required: true,
+  },
+  merchant: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
     required: true,
   },
   startDate: {
@@ -16,14 +29,9 @@ const adSchema = new Schema({
     type: Date,
     required: true,
   },
-  status: {
-    type: String,
-    enum: ['pending', 'approved', 'rejected'],
-    default: 'pending',
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
+  isActive: {
+    type: Boolean,
+    default: true,
   },
 });
 

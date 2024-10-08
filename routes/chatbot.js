@@ -1,29 +1,30 @@
+// routes/chatbot.js
 const express = require('express');
 const router = express.Router();
 const { Configuration, OpenAIApi } = require('openai');
 
-// إعداد مكتبة OpenAI باستخدام مفتاح API الخاص بك
+// إعداد OpenAI API
 const configuration = new Configuration({
-  apiKey: process.env.OPENAI_API_KEY,  // تأكد من إضافة هذا المفتاح في ملف .env
+  apiKey: process.env.OPENAI_API_KEY,
 });
 const openai = new OpenAIApi(configuration);
 
-// API للتفاعل مع الذكاء الاصطناعي
-router.post('/chat', async (req, res) => {
+// مسار لتقديم الدعم الفوري للمستخدمين باستخدام الذكاء الاصطناعي
+router.post('/ask', async (req, res) => {
   const { message } = req.body;
 
   try {
-    const response = await openai.createCompletion({
-      model: 'gpt-4',
-      prompt: message,
-      max_tokens: 100,
+    const response = await openai.createChatCompletion({
+      model: 'gpt-3.5-turbo',
+      messages: [{ role: 'user', content: message }],
     });
 
-    res.json({ reply: response.data.choices[0].text.trim() });
+    const chatbotResponse = response.data.choices[0].message.content;
+    res.status(200).json({ response: chatbotResponse });
   } catch (error) {
-    console.error('Error interacting with OpenAI:', error);
-    res.status(500).json({ error: 'Error processing AI request' });
+    res.status(500).json({ message: 'حدث خطأ أثناء الحصول على رد من الذكاء الاصطناعي' });
   }
 });
 
 module.exports = router;
+
